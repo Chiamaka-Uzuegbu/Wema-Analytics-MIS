@@ -7,7 +7,7 @@ This repo contains:
 - `sql/` — SQL scripts (tables, upsert stored proc, agent job)
 
 ## Prerequisites
-- .NET SDK (8)
+- .NET SDK (8/9)
 - SQL Server
 - dotnet-ef tool (`dotnet tool install --global dotnet-ef`)
 
