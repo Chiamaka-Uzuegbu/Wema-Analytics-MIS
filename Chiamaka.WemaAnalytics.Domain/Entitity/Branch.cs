@@ -13,6 +13,8 @@ namespace Chiamaka.WemaAnalytics.Domain.Entitity
         public string City { get; set; } = string.Empty;
         public string  Region { get; set; } = string.Empty;
         public bool  IsActive { get; set; }
+        public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+        public DateTime? UpdatedAtUtc { get; set; }
         public bool IsDeleted { get; set; }
     }
 }

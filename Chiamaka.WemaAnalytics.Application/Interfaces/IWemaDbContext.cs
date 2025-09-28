@@ -8,9 +8,11 @@ using System.Threading.Tasks;
 
 namespace Chiamaka.WemaAnalytics.Application.Interfaces
 {
-    public interface IApplicationDbContext
+    public interface IWemaDbContext
     {
         DbSet<Branch> Branches { get; }
+        DbSet<Account> Accounts { get; }
+        DbSet<KpiSnapshot> KpiSnapshots { get; }
         Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
     }
 }
