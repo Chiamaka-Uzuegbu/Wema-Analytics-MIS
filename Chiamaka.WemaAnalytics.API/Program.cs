@@ -11,9 +11,9 @@ var builder = WebApplication.CreateBuilder(args);
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
+builder.Services.AddDbContext<WemaDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("AppDBConnection")));
-builder.Services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<ApplicationDbContext>());
+builder.Services.AddScoped<IWemaDbContext, WemaDbContext>(provider => provider.GetRequiredService<WemaDbContext>());
 builder.Services.AddMediatR(cfg =>
     cfg.RegisterServicesFromAssembly(typeof(CreateBranchCommand).Assembly));
 
@@ -28,7 +28,7 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseHttpsRedirection();
 
-app.MapGroup("wemaanalytics/api/").MapBranchGroup();
+app.MapGroup("wemaanalytics/api").MapBranchGroup();
 
 app.Run();
 
