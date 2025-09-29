@@ -21,11 +21,7 @@ namespace Chiamaka.WemaAnalytics.Application.QueryHandlers
 
         public async Task<Branch> Handle(GetBranchByIdQuery request, CancellationToken cancellationToken)
         {
-            var newBranch = new Branch
-            {
-                ID = Guid.NewGuid()
-            };
-            return await _context.Branches.AsNoTracking().FirstOrDefaultAsync(b => b.ID == newBranch.ID && !b.IsDeleted, cancellationToken!);
+            return await _context.Branches.AsNoTracking().FirstOrDefaultAsync(b => b.ID == request.Id && !b.IsDeleted, cancellationToken!);
         }
     }
 }

@@ -17,28 +17,20 @@ namespace Chiamaka.WemaAnalytics.Application.CommandHandlers
 
         public async Task<Result<int>> Handle(UpdateBranchCommand request, CancellationToken cancellationToken)
         {
-            var newBranch = new Branch
-            {
-                ID = Guid.NewGuid(),
-                Code = "WAB"+ DateTime.Now.ToString("yyMMddHHmmss"),
-                Name = request.Name,
-                City = request.City,
-                Region = request.Region,
-                IsActive = true
-            };
-            var entity = await _context.Branches.FirstOrDefaultAsync(b => b.ID == newBranch.ID && !b.IsDeleted, cancellationToken);
+        
+            var entity = await _context.Branches.FirstOrDefaultAsync(b => b.ID == request.Id && !b.IsDeleted, cancellationToken);
             if (entity == null) throw new KeyNotFoundException("Branch not found");
 
-            if (!string.IsNullOrWhiteSpace(newBranch.Name)) entity.Name = newBranch.Name;
-            if (newBranch.City != null) entity.City = newBranch.City;
-            if (newBranch.Region != null) entity.Region = newBranch.Region;
-            if (newBranch.IsActive) entity.IsActive = newBranch.IsActive;
+            if (!string.IsNullOrWhiteSpace(request.Name)) entity.Name = request.Name;
+            if (entity.City != null) entity.City = request.City;
+            if (entity.Region != null) entity.Region = request.Region;
+            if (entity.IsActive) entity.IsActive = entity.IsActive;
 
             entity.UpdatedAtUtc = DateTime.UtcNow;
+             _context.Branches.Update(entity);
             return await _context.SaveChangesAsync(cancellationToken) > 0
-                ? Result<int>.Success(1,"Branch updated succesfully")
-                : Result<int>.Failure("Failed to update branch");
-        
+                ? Result<int>.Success(1, "Branch updated succesfully")
+                : Result<int>.Failure("Failed to update branch");     
         }
     }
 }
