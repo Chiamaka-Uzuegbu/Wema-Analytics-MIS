@@ -13,8 +13,8 @@ namespace Chiamaka.WemaAnalytics.Application.CommandHandlers
 {
     public class CreateBranchCommandHandler : IRequestHandler<CreateBranchCommand, Result<int>>
     {
-        private readonly IApplicationDbContext _context;
-        public CreateBranchCommandHandler(IApplicationDbContext context)
+        private readonly IWemaDbContext _context;
+        public CreateBranchCommandHandler(IWemaDbContext context)
         {
             _context = context;
         }

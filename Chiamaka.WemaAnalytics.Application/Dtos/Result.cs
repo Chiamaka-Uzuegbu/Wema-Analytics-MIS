@@ -8,7 +8,7 @@ namespace Chiamaka.WemaAnalytics.Application.Dtos
 {
     public class Result<T>
     {
-        public T Data { get; set; }
+        public T? Data { get; set; }
         public bool IsSuccess { get; set; }
         public bool HasError => ErrorMessage != "" ;
         public string ErrorMessage { get; set; } = "";
@@ -27,7 +27,7 @@ namespace Chiamaka.WemaAnalytics.Application.Dtos
         {
             return new Result<T>
             {
-                Data = default,
+                Data = default!,
                 IsSuccess = false,
                 ErrorMessage = errorMessage
             };

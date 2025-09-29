@@ -1,0 +1,180 @@
+﻿SQL Stored Procedure (Upsert with logging)
+
+
+USE WemaAnalytics;
+GO
+
+
+IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'WemaAnalytics')
+BEGIN
+    EXEC('CREATE SCHEMA WemaAnalytics');
+END
+GO
+
+
+IF OBJECT_ID('WemaAnalytics.Accounts', 'U') IS NULL
+BEGIN
+    CREATE TABLE WemaAnalytics.Accounts (
+        AccountId INT IDENTITY(1,1) PRIMARY KEY,
+        Account_Number NVARCHAR(50) NOT NULL UNIQUE,
+        AccountName NVARCHAR(200),
+        Balance DECIMAL(18,2) DEFAULT 0,
+        Status NVARCHAR(50),
+        Last_Updated_At DATETIME2
+    );
+END
+GO
+
+
+-- ProcessRunLogs
+IF OBJECT_ID('WemaAnalytics.ProcessRunLogs', 'U') IS NULL
+BEGIN
+    CREATE TABLE WemaAnalytics.ProcessRunLogs (
+        RunId INT IDENTITY(1,1) PRIMARY KEY,
+        RunDate DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+        InsertedCount INT,
+        UpdatedCount INT,
+        SourceTable NVARCHAR(200),
+        Notes NVARCHAR(4000)
+    );
+END
+GO
+
+
+-- Stored Procedure
+CREATE OR ALTER PROCEDURE WemaAnalytics.UpsertAccountsFromSource
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedCount INT = 0;
+    DECLARE @UpdatedCount INT = 0;
+
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+
+        -- MERGE between source and destination
+        MERGE INTO WemaAnalytics.Accounts AS target
+        USING (
+            SELECT
+                account_number,
+                account_name,
+                balance,
+                status,
+                last_updated_at
+            FROM Wema_Analytics_Data.dbo.Account_Statistics_Details
+        ) AS src (account_number, account_name, balance, status, last_updated_at)
+        ON target.Account_Number = src.account_number
+        WHEN MATCHED AND src.last_updated_at > ISNULL(target.Last_Updated_At, '1900-01-01') THEN
+            UPDATE SET
+                AccountName = src.account_name,
+                Balance = src.balance,
+                Status = src.status,
+                Last_Updated_At = src.last_updated_at
+            OUTPUT $action, inserted.Account_Number INTO @OutputTable(account_action, account_number)
+        WHEN NOT MATCHED BY TARGET THEN
+            INSERT (Account_Number, AccountName, Balance, Status, Last_Updated_At)
+            VALUES (src.account_number, src.account_name, src.balance, src.status, src.last_updated_at)
+            OUTPUT $action, inserted.Account_Number INTO @OutputTable(account_action, account_number)
+        ;
+
+
+        -- To get the counts
+        DECLARE @OutputTable TABLE (account_action NVARCHAR(10), account_number NVARCHAR(50));
+
+
+        -- Re-run MERGE properly capturing output:
+        DELETE FROM @OutputTable;
+
+
+        MERGE INTO WemaAnalytics.Accounts AS target
+        USING (
+            SELECT
+                account_number,
+                account_name,
+                balance,
+                status,
+                last_updated_at
+            FROM Wema_Analytics_Data.dbo.Account_Statistics_Details
+        ) AS src (account_number, account_name, balance, status, last_updated_at)
+        ON target.Account_Number = src.account_number
+        WHEN MATCHED AND src.last_updated_at > ISNULL(target.Last_Updated_At, '1900-01-01') THEN
+            UPDATE SET
+                AccountName = src.account_name,
+                Balance = src.balance,
+                Status = src.status,
+                Last_Updated_At = src.last_updated_at
+            OUTPUT $action, inserted.Account_Number INTO @OutputTable(account_action, account_number)
+        WHEN NOT MATCHED BY TARGET THEN
+            INSERT (Account_Number, AccountName, Balance, Status, Last_Updated_At)
+            VALUES (src.account_number, src.account_name, src.balance, src.status, src.last_updated_at)
+            OUTPUT $action, inserted.Account_Number INTO @OutputTable(account_action, account_number)
+        ;
+
+
+        SELECT @InsertedCount = SUM(CASE WHEN account_action = 'INSERT' THEN 1 ELSE 0 END),
+               @UpdatedCount = SUM(CASE WHEN account_action = 'UPDATE' THEN 1 ELSE 0 END)
+        FROM @OutputTable;
+
+
+        -- Insert process log
+        INSERT INTO WemaAnalytics.ProcessRunLogs (InsertedCount, UpdatedCount, SourceTable, Notes)
+        VALUES (@InsertedCount, @UpdatedCount, 'Wema_Analytics_Data.dbo.Account_Statistics_Details', 'Upsert run completed successfully');
+
+
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        ROLLBACK TRANSACTION;
+        DECLARE @ErrMsg NVARCHAR(4000) = ERROR_MESSAGE();
+        INSERT INTO WemaAnalytics.ProcessRunLogs (InsertedCount, UpdatedCount, SourceTable, Notes)
+        VALUES (0,0, 'Wema_Analytics_Data.dbo.Account_Statistics_Details', 'Error: ' + LEFT(@ErrMsg, 2000));
+        THROW;
+    END CATCH
+END
+GO
+
+
+
+
+
+
+SQL Agent job script (cron-like scheduling)
+
+
+USE msdb;
+GO
+
+
+EXEC dbo.sp_add_job
+    @job_name = N'WemaAnalytics.UpsertAccountsFromSourceJob',
+    @enabled = 1,
+    @description = N'Runs UpsertAccountsFromSource daily at 2am';
+
+
+EXEC sp_add_jobstep
+    @job_name = N'WemaAnalytics.UpsertAccountsFromSourceJob',
+    @step_name = N'Execute Upsert',
+    @subsystem = N'TSQL',
+    @command = N'EXEC WemaAnalytics.UpsertAccountsFromSource;',
+    @retry_attempts = 2,
+    @retry_interval = 5;
+
+
+-- Schedule: daily at 2:00 AM
+EXEC dbo.sp_add_schedule
+    @schedule_name = N'WemaAnalytics_Daily_2AM',
+    @freq_type = 4, -- daily
+    @active_start_time = 020000; -- 02:00:00
+
+
+EXEC dbo.sp_attach_schedule
+    @job_name = N'WemaAnalytics.UpsertAccountsFromSourceJob',
+    @schedule_name = N'WemaAnalytics_Daily_2AM';
+
+
+EXEC dbo.sp_add_jobserver
+    @job_name = N'WemaAnalytics.UpsertAccountsFromSourceJob',
+    @server_name = @@SERVERNAME;
+GO
